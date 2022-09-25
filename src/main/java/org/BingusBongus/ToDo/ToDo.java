@@ -11,7 +11,7 @@ public class ToDo
         this.id = String.format("%x", UUID.randomUUID().toString());
         this.createdDate = LocalDateTime.now();
         this.modifiedDate = LocalDateTime.now();
-        this.taskTitle = taskTitle;
+        //this.taskTitle = taskTitle;
         this.taskDescription = taskDescription;
         this.isComplete = false;
     }
@@ -19,7 +19,7 @@ public class ToDo
     private String id;
     private LocalDateTime createdDate;
     private LocalDateTime modifiedDate;
-    private String taskTitle;
+    //private String taskTitle;
     private String taskDescription;
     private boolean isComplete;
 
@@ -43,15 +43,15 @@ public class ToDo
         this.modifiedDate = modifiedDate;
     }
 
-    public String getTaskTitle()
-    {
-        return taskTitle;
-    }
-
-    public void setTaskTitle(String taskTitle)
-    {
-        this.taskTitle = taskTitle;
-    }
+//    public String getTaskTitle()
+//    {
+//        return taskTitle;
+//    }
+//
+//    public void setTaskTitle(String taskTitle)
+//    {
+//        this.taskTitle = taskTitle;
+//    }
 
     public String getTaskDescription()
     {

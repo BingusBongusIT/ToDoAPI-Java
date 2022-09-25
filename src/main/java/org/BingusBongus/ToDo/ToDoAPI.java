@@ -8,6 +8,7 @@ import com.microsoft.azure.functions.HttpStatus;
 import com.microsoft.azure.functions.annotation.AuthorizationLevel;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
+import org.BingusBongus.JSON.JSON;
 
 import java.util.ArrayList;
 import java.util.List;
@@ -22,6 +23,11 @@ public class ToDoAPI
     static List<ToDo> ToDoList = new ArrayList<>();
 
     /**
+     * Function to crate a new todo.
+     * Triggers with an HttpTrigger on api/todo and creates a new todo from the requestbody
+     * which is the added to the list of todos
+     *
+     * @see org.BingusBongus.JSON.getParamFromJson()
      *
      * @param request
      * @param context
@@ -31,18 +37,19 @@ public class ToDoAPI
     public HttpResponseMessage createToDo
     (
         @HttpTrigger(name = "req", methods = HttpMethod.POST, authLevel = AuthorizationLevel.ANONYMOUS, route = "todo")
-        HttpRequestMessage<Optional<String>> request,
+        HttpRequestMessage<String> request,
         final ExecutionContext context
     )
     {
         context.getLogger().info("Java HTTP POST Request \"CreateToDo\" received");
 
-        //Parse query Parameters
-        final String query = request.getQueryParameters().get("name");
-        final String name = request.getBody().orElse(query);
+        //Get query
+        final String query = request.getBody();
+        context.getLogger().info("Java HTTP POST query body " + query);
 
-        ToDo todo = new ToDo(name);
+        ToDo todo = new ToDo(JSON.getPramFromJson(query, "taskDescription"));
         ToDoList.add(todo);
+
         context.getLogger().info("Java HTTP POST Request \"CreateToDo\" processed\nNew ToDo has been added to the List");
 
         return request.createResponseBuilder(HttpStatus.OK).build();
