@@ -11,12 +11,18 @@ import com.microsoft.azure.functions.annotation.BindingName;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.HttpTrigger;
 
+import java.io.Reader;
+import java.lang.reflect.Type;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
 
 /**
+ * API between the storage, creation and management of the todos and the
+ * users interaction with them
  *
+ * @author colllijo
+ * @version 1.0.0
  */
 public class ToDoAPI
 {
@@ -26,12 +32,17 @@ public class ToDoAPI
 
     /**
      * Function to crate a new todo.
-     * Triggers with an HttpTrigger on api/todo and creates a new todo from the requestbody
-     * which is the added to the list of todos
+     * Triggers with an HttpTrigger on api/todo and creates a new ToDo from the request-body
+     * which is then added to the list of todos
+     * @see org.BingusBongus.ToDo.ToDo
      *
-     * @param request
+     * The create a ToDo from the request google's Gson library is used to create a object from the json
+     * which is then added to the Todo
+     * @see com.google.gson.Gson#fromJson(Reader, Type)
+     *
+     * @param request - request body containing the todo to create in json format
      * @param context
-     * @return
+     * @return - returns a sucess code if the todo was successfully be added to the list
      */
     @FunctionName("CreateToDo")
     public HttpResponseMessage createToDo
@@ -46,7 +57,8 @@ public class ToDoAPI
         //Get query
         final String query = request.getBody();
 
-        ToDo todo = new ToDo(gson.fromJson(query, ToDoCreateModel.class).getTaskDescription());
+        //Create a Todo from the query using gson to extraxt the taskDescription from the query
+        ToDo todo = new ToDo(gson.fromJson(query, ToDo.class).getTaskDescription());
 
         ToDoList.add(todo);
 
@@ -57,10 +69,13 @@ public class ToDoAPI
     }
 
     /**
+     * Function to return all ToDos which are currently stored
+     * Triggers with an HttpTrigger on api/todo and returns the Todolsit in the response
+     * @see org.BingusBongus.ToDo.ToDo
      *
      * @param request
      * @param context
-     * @return
+     * @return - Returns the Todolist as well as a success status
      */
     @FunctionName("GetToDos")
     public HttpResponseMessage GetToDos
@@ -72,33 +87,34 @@ public class ToDoAPI
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDos\" received");
 
-        if(ToDoList.size() > 0)
-            context.getLogger().info("" + ToDoList.get(0).isComplete());
-
         return request.createResponseBuilder(HttpStatus.OK).body(ToDoList).build();
     }
 
     /**
      *
+     * Function to return a specific todo by its id
+     * Triggers with an HttpTrigger on api/todo/{id} and returns the todo with the corresponding id if found
+     * Checks all the ToDo for if the match the given id and if that one exists returns it
+     * @see org.BingusBongus.ToDo.ToDo
+     *
      * @param request
      * @param context
-     * @return
+     * @param id - id of the ToDo which shall be returned
+     * @return - If Found returns the ToDo an id matching the id parameter and a succes code, else returns a bad request
      */
     @FunctionName("GetToDoById")
     public HttpResponseMessage GetToDoById(
             @HttpTrigger(name = "req", methods = HttpMethod.GET, authLevel = AuthorizationLevel.ANONYMOUS, route = "todo/{id}")
             HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context
+            final ExecutionContext context,
+            @BindingName("id") String id
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDoById\" with id:${id} received");
 
-        //Parse query Parameters
-        final String query = request.getQueryParameters().get("id");
-        final String id = request.getBody().orElse(query);
-
         ToDo todo = null;
 
+        //Go through all ToDos of the ToDoList searching for a matching id
         for(ToDo ltodo:ToDoList)
         {
             if(ltodo.getId().equals(id))
@@ -106,22 +122,21 @@ public class ToDoAPI
         }
 
         context.getLogger().info("Java HTTP GET Request \"GetToDoById\" with id:${id} processed");
-        if(todo == null)
-        {
-            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build();
-        }
-        else
-        {
-            return request.createResponseBuilder(HttpStatus.OK).body(todo).build();
-        }
 
+        if(todo == null){ return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build(); }
+        else{ return request.createResponseBuilder(HttpStatus.OK).body(todo).build(); }
     }
 
     /**
+     * Function to update the contents of a specific todo
+     * Triggers with an HttpTrigger on api/todo/{id} and updates the Todo
+     * matching the id of the request ot the contents of the request body
+     * @see org.BingusBongus.ToDo.ToDo
      *
-     * @param request
+     * @param request - body of the request containing the new information of the Todo
      * @param context
-     * @return
+     * @param id - id of the ToDo to update
+     * @return - if the ToDo with the given id was found an successfully update returns a success code and the updated to else wise returns a bad request
      */
     @FunctionName("UpdateToDo")
     public HttpResponseMessage UpdateToDo(
@@ -134,15 +149,16 @@ public class ToDoAPI
         context.getLogger().info("Java HTTP GET Request \"UpdateToDo\" with id:" + id + " received");
 
         //Parse query Parameters
-        final String query = request.getQueryParameters().get("id");
+        final String query = request.getQueryParameters().get("isComplete");
         final String body = request.getBody().orElse(query);
 
-        ToDo cTodo = null;
+        //Check all ToDos in the List for a matching id
         for(ToDo todo:ToDoList)
         {
             if(todo.getId().equals(id))
             {
-                todo.setComplete(gson.fromJson(body, ToDoUpdateModel.class).isComplete());
+                //As a matching id has been found update that todo
+                todo.setComplete(gson.fromJson(body, ToDo.class).isComplete());
 
                 context.getLogger().info("Java HTTP GET Request \"UpdateToDo\" with id:" + id + " processed");
                 return request.createResponseBuilder(HttpStatus.OK).body(todo).build();
@@ -150,14 +166,18 @@ public class ToDoAPI
         }
 
         context.getLogger().info("Couldn't find " + id + " in ToDoList");
-        return request.createResponseBuilder(HttpStatus.UNAVAILABLE_FOR_LEGAL_REASONS).build();
+        return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build();
     }
 
     /**
+     * Function to Delete a specific ToDo by its id
+     * Triggers with an HttpTrigger on api/todo/{id} and deletes the todo with matches the sent id
+     * @see org.BingusBongus.ToDo.ToDo
      *
      * @param request
      * @param context
-     * @return
+     * @param id - id of the ToDo which shall be deleted
+     * @return - returns a success code if the todo was found and thus delete and a bad request if it couldn't be found
      */
     @FunctionName("DeleteToDo")
     public HttpResponseMessage DeleteToDo(
@@ -169,8 +189,7 @@ public class ToDoAPI
     {
         context.getLogger().info("Java HTTP GET Request \"DeleteToDo\" with id:" + id + " received");
 
-        //Parse query Parameters
-
+        //Check all Todos for a matching id
         for(ToDo todo: ToDoList)
         {
             if(todo.getId().equals(id))
@@ -181,6 +200,6 @@ public class ToDoAPI
         }
 
         context.getLogger().info("Couldn't find " + id + " in ToDoList");
-        return request.createResponseBuilder(HttpStatus.UNAVAILABLE_FOR_LEGAL_REASONS).build();
+        return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build();
     }
 }

@@ -4,6 +4,9 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
+/**
+ * ToDo Datastructur
+ */
 public class ToDo
 {
     private String id;
@@ -40,47 +43,6 @@ public class ToDo
     {
         this.modifiedDate = modifiedDate.toString();
     }
-
-    public String getTaskDescription()
-    {
-        return taskDescription;
-    }
-
-    public void setTaskDescription(String taskDescription)
-    {
-        this.taskDescription = taskDescription;
-    }
-
-    public boolean isComplete()
-    {
-        return isComplete;
-    }
-
-    public void setComplete(boolean complete)
-    {
-        isComplete = complete;
-    }
-}
-
-class ToDoCreateModel
-{
-    private String taskDescription;
-
-    public String getTaskDescription()
-    {
-        return taskDescription;
-    }
-
-    public void setTaskDescription(String taskDescription)
-    {
-        this.taskDescription = taskDescription;
-    }
-}
-
-class ToDoUpdateModel
-{
-    private String taskDescription;
-    private boolean isComplete;
 
     public String getTaskDescription()
     {
