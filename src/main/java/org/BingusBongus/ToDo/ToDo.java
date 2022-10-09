@@ -6,6 +6,9 @@ import java.util.UUID;
 
 /**
  * ToDo Datastructur
+ *
+ * @author colllijo
+ * @version 1.0.0
  */
 public class ToDo
 {
