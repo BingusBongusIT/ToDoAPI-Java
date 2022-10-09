@@ -60,6 +60,9 @@ public class ToDoAPI
         //Get query
         final String query = request.getBody();
 
+        if(gson.fromJson(query, ToDo.class).getTaskDescription().trim().isEmpty())
+            return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build();
+
         //Create a Todo from the query using gson to extract the taskDescription from the query and map it to a table-entity
         ToDoTableEntity entity = EntityMapper.ToDoToTableEntity(new ToDo(gson.fromJson(query, ToDo.class).getTaskDescription()));
         todo.setValue(entity);
