@@ -25,6 +25,7 @@ public class ToDoAPI
     private final String ROUTE = "todo";
     private final String DBNAME = "todoDB";
     private final String TABLENAME = "todos";
+    private final String PARTITIONKEY = "TODO";
 
     //Local List of all ToDo's
     static List<ToDo> ToDoList = new ArrayList<>();
@@ -80,26 +81,15 @@ public class ToDoAPI
     @FunctionName("GetToDos")
     public HttpResponseMessage GetToDos
     (
-            @HttpTrigger(name = "req", methods = HttpMethod.GET, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE)
-            HttpRequestMessage<Optional<String>> request,
+            @HttpTrigger(name = "req", methods = HttpMethod.GET, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE) HttpRequestMessage<Optional<String>> request,
+            @TableInput(name = DBNAME, partitionKey = PARTITIONKEY, tableName = TABLENAME, connection = "AzureWebJobsStorage") ToDoTableEntity[] toDoTableEntities,
             final ExecutionContext context
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDos\" received");
 
-        return request.createResponseBuilder(HttpStatus.OK).body(ToDoList).build();
+        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.ToDoTableEntitiesToToDos(toDoTableEntities)).build();
     }
-//    [FunctionName("GetToDos")]
-//    public static async Task<IActionResult> GetToDos(
-//            [HttpTrigger(AuthorizationLevel.Anonymous, "get", Route = Route)] HttpRequest req,
-//            [Table("todos", Connection = "AzureWebJobsStorage")] TableClient todoTable,
-//    ILogger log)
-//    {
-//        log.LogInformation("Getting todo list items");
-//        var page1 = await todoTable.QueryAsync<TodoTableEntity>().AsPages().FirstAsync();
-//
-//        return new OkObjectResult(page1.Values.Select(Mappings.ToTodo));
-//    }
 
     /**
      *
@@ -113,27 +103,15 @@ public class ToDoAPI
      */
     @FunctionName("GetToDoById")
     public HttpResponseMessage GetToDoById(
-            @HttpTrigger(name = "req", methods = HttpMethod.GET, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}")
-            HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context,
-            @BindingName("id") String id
+            @HttpTrigger(name = "req", methods = HttpMethod.GET, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}") HttpRequestMessage<Optional<String>> request,
+            @BindingName("id") String id,
+            @TableInput(name = DBNAME, partitionKey = PARTITIONKEY, rowKey = "{id}" ,tableName = TABLENAME, connection = "AzureWebJobsStorage") ToDoTableEntity toDoTableEntity,
+            final ExecutionContext context
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDoById\" with id:${id} received");
 
-        ToDo todo = null;
-
-        //Go through all ToDos of the ToDoList searching for a matching id
-        for(ToDo l_todo:ToDoList)
-        {
-            if(l_todo.getId().equals(id))
-                todo = l_todo;
-        }
-
-        context.getLogger().info("Java HTTP GET Request \"GetToDoById\" with id:${id} processed");
-
-        if(todo == null){ return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build(); }
-        else{ return request.createResponseBuilder(HttpStatus.OK).body(todo).build(); }
+        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.ToDoTableEntityToToDo(toDoTableEntity)).build();
     }
 
     /**
@@ -148,10 +126,10 @@ public class ToDoAPI
      */
     @FunctionName("UpdateToDo")
     public HttpResponseMessage UpdateToDo(
-            @HttpTrigger(name = "req", methods = HttpMethod.PUT, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}")
-            HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context,
-            @BindingName("id") String id
+            @HttpTrigger(name = "req", methods = HttpMethod.PUT, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}") HttpRequestMessage<Optional<String>> request,
+            @BindingName("id") String id,
+//            @TableOutput(name = DBNAME, partitionKey = PARTITIONKEY, rowKey = "{id}" ,tableName = TABLENAME, connection = "AzureWebJobsStorage") OutputBinding<ToDoTableEntity> toDoTableEntity,
+            final ExecutionContext context
     )
     {
         context.getLogger().info("Java HTTP GET Request \"UpdateToDo\" with id:" + id + " received");
@@ -160,21 +138,11 @@ public class ToDoAPI
         final String query = request.getQueryParameters().get("isComplete");
         final String body = request.getBody().orElse(query);
 
-        //Check all ToDos in the List for a matching id
-        for(ToDo todo:ToDoList)
-        {
-            if(todo.getId().equals(id))
-            {
-                //As a matching id has been found update that todo
-                todo.setComplete(gson.fromJson(body, ToDo.class).isComplete());
+//        todo.setComplete(gson.fromJson(body, ToDo.class).isComplete());
+//        toDoTableEntity.setValue();
 
-                context.getLogger().info("Java HTTP GET Request \"UpdateToDo\" with id:" + id + " processed");
-                return request.createResponseBuilder(HttpStatus.OK).body(todo).build();
-            }
-        }
-
-        context.getLogger().info("Couldn't find " + id + " in ToDoList");
-        return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build();
+        context.getLogger().info("Java HTTP GET Request \"UpdateToDo\" with id:" + id + " processed");
+        return request.createResponseBuilder(HttpStatus.I_AM_A_TEAPOT).build();
     }
 
     /**
@@ -187,8 +155,7 @@ public class ToDoAPI
      */
     @FunctionName("DeleteToDo")
     public HttpResponseMessage DeleteToDo(
-            @HttpTrigger(name = "req", methods = HttpMethod.DELETE, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}")
-            HttpRequestMessage<Optional<String>> request,
+            @HttpTrigger(name = "req", methods = HttpMethod.DELETE, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}") HttpRequestMessage<Optional<String>> request,
             final ExecutionContext context,
             @BindingName("id") String id
     )
