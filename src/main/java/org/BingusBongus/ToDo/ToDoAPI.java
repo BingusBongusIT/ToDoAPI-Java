@@ -7,13 +7,15 @@ import com.azure.data.tables.models.TableEntity;
 import com.azure.data.tables.models.TableEntityUpdateMode;
 import com.google.gson.Gson;
 import com.microsoft.azure.functions.*;
-import com.microsoft.azure.functions.annotation.*;
+import com.microsoft.azure.functions.annotation.AuthorizationLevel;
+import com.microsoft.azure.functions.annotation.BindingName;
+import com.microsoft.azure.functions.annotation.FunctionName;
+import com.microsoft.azure.functions.annotation.HttpTrigger;
 
 import java.io.Reader;
 import java.lang.reflect.Type;
-import java.nio.channels.ScatteringByteChannel;
 import java.util.ArrayList;
-import java.util.List;
+import java.util.Arrays;
 import java.util.Optional;
 
 /**
@@ -21,29 +23,21 @@ import java.util.Optional;
  * users interaction with them
  *
  * @author colllijo
- * @version 1.1.0
+ * @version 2.0.0
  */
 public class ToDoAPI
 {
     //Constant Variables
     private final String ROUTE = "todo";
-    public final String CONNECTIONSTRING =
-            "DefaultEndpointsProtocol=https;" +
-            "AccountName=devstoreaccount1;" +
-            "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;" +
-            "TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;";
     private final String TABLENAME = "todos";
-    private final String PARTITIONKEY = "TODO";
-
-    //Local List of all ToDo's
-    static List<ToDo> ToDoList = new ArrayList<>();
+    private final String PARTITION_KEY = "TODO";
     final public Gson gson = new Gson();
 
     //Connect to the Database
     private final TableClient tableClient = new TableClientBuilder()
-        .connectionString(CONNECTIONSTRING)
-        .tableName(TABLENAME)
-        .buildClient();
+            .connectionString("CONNECTION_STRING = DefaultEndpointsProtocol=https;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;")
+            .tableName(TABLENAME)
+            .buildClient();
 
     /**
      * Function to crate a new todo.
@@ -84,7 +78,7 @@ public class ToDoAPI
         }
         catch(Exception exception)
         {
-            context.getLogger().warning("Something went wrong while creating a todo\nRequest body: " + query + "\nException: " + exception.getStackTrace());
+            context.getLogger().warning("Something went wrong while creating a todo\nRequest body: " + query + "\nException: " + Arrays.toString(exception.getStackTrace()));
             return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).build();
         }
 
@@ -111,9 +105,7 @@ public class ToDoAPI
 
         ArrayList<ToDo> toDos = new ArrayList<>();
 
-        tableClient.listEntities(new ListEntitiesOptions().setFilter("PartitionKey eq '" + PARTITIONKEY + "'"), null, null).forEach(tableEntity -> {
-            toDos.add(EntityMapper.TableEntityToToDo(tableEntity));
-        });
+        tableClient.listEntities(new ListEntitiesOptions().setFilter("PartitionKey eq '" + PARTITION_KEY + "'"), null, null).forEach(tableEntity -> toDos.add(EntityMapper.TableEntityToToDo(tableEntity)));
 
         return request.createResponseBuilder(HttpStatus.OK).body(toDos.toArray()).build();
     }
@@ -137,7 +129,7 @@ public class ToDoAPI
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDoById\" with id:${id} received");
 
-        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntityToToDo(tableClient.getEntity(PARTITIONKEY, id))).build();
+        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntityToToDo(tableClient.getEntity(PARTITION_KEY, id))).build();
     }
 
     /**
@@ -163,7 +155,7 @@ public class ToDoAPI
         final String query = request.getQueryParameters().get("isComplete");
         final String body = request.getBody().orElse(query);
 
-        TableEntity entity = tableClient.getEntity(PARTITIONKEY, id);
+        TableEntity entity = tableClient.getEntity(PARTITION_KEY, id);
         entity.getProperties().put("isComplete", gson.fromJson(body, ToDo.class).isComplete());
 
         tableClient.updateEntity(entity , TableEntityUpdateMode.REPLACE);
@@ -189,7 +181,7 @@ public class ToDoAPI
     {
         context.getLogger().info("Java HTTP GET Request \"DeleteToDo\" with id:" + id + " received");
 
-        tableClient.deleteEntity(PARTITIONKEY, id);
+        tableClient.deleteEntity(PARTITION_KEY, id);
         return request.createResponseBuilder(HttpStatus.OK).build();
     }
 }

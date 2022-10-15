@@ -12,7 +12,7 @@ import java.util.Objects;
  * and vis-versa to post and get from the database
  *
  * @author collijo
- * @version 0.2.2
+ * @version 2.0.0
  */
 public class EntityMapper
 {
