@@ -1,13 +1,17 @@
 package org.BingusBongus.ToDo;
 
+import com.azure.data.tables.TableClient;
+import com.azure.data.tables.TableClientBuilder;
+import com.azure.data.tables.models.ListEntitiesOptions;
+import com.azure.data.tables.models.TableEntity;
+import com.azure.data.tables.models.TableEntityUpdateMode;
 import com.google.gson.Gson;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.*;
-import org.BingusBongus.TableEntities.EntityMapper;
-import org.BingusBongus.TableEntities.ToDoTableEntity;
 
 import java.io.Reader;
 import java.lang.reflect.Type;
+import java.nio.channels.ScatteringByteChannel;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Optional;
@@ -23,7 +27,11 @@ public class ToDoAPI
 {
     //Constant Variables
     private final String ROUTE = "todo";
-    private final String DBNAME = "todoDB";
+    public final String CONNECTIONSTRING =
+            "DefaultEndpointsProtocol=https;" +
+            "AccountName=devstoreaccount1;" +
+            "AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;" +
+            "TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;";
     private final String TABLENAME = "todos";
     private final String PARTITIONKEY = "TODO";
 
@@ -31,27 +39,31 @@ public class ToDoAPI
     static List<ToDo> ToDoList = new ArrayList<>();
     final public Gson gson = new Gson();
 
+    //Connect to the Database
+    private final TableClient tableClient = new TableClientBuilder()
+        .connectionString(CONNECTIONSTRING)
+        .tableName(TABLENAME)
+        .buildClient();
+
     /**
      * Function to crate a new todo.
      * Triggers with an HttpTrigger on api/todo and creates a new ToDo from the request-body
      * which is then added to the Database after being converted
      * @see org.BingusBongus.ToDo.ToDo
-     * @see org.BingusBongus.TableEntities.ToDoTableEntity
+     * @see com.azure.data.tables.models.TableEntity
      *
      * To create a ToDo from the request google's Gson library is used to create a object from the json
      * This object is then mapped to a tableentity which gets outputed to the Table
      * @see com.google.gson.Gson#fromJson(Reader, Type)
-     * @see org.BingusBongus.TableEntities.EntityMapper#ToDoToTableEntity(ToDo)
+     * @see EntityMapper#ToDoToTableEntity(ToDo)
      *
      * @param request - request body containing the todo to create in json format
-     * @param todo - OutputBinding to the Database
      * @return - returns a success code if the todo was successfully be added to the list
      */
     @FunctionName("CreateToDo")
     public HttpResponseMessage createToDo
     (
         @HttpTrigger(name = "req", methods = HttpMethod.POST, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE) HttpRequestMessage<String> request,
-        @TableOutput(name=DBNAME, tableName = TABLENAME, connection="AzureWebJobsStorage") OutputBinding<ToDoTableEntity> todo,
         final ExecutionContext context
     )
     {
@@ -63,15 +75,22 @@ public class ToDoAPI
         if(gson.fromJson(query, ToDo.class).getTaskDescription().trim().isEmpty())
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build();
 
-        //Create a Todo from the query using gson to extract the taskDescription from the query and map it to a table-entity
-        ToDoTableEntity entity = EntityMapper.ToDoToTableEntity(new ToDo(gson.fromJson(query, ToDo.class).getTaskDescription()));
-        todo.setValue(entity);
+        ToDo todo = new ToDo(gson.fromJson(query, ToDo.class).getTaskDescription());
 
+        try
+        {
+            //Create a ToDo from the query using gson, map it to a TableEntity and insert it into the table
+            tableClient.upsertEntity(EntityMapper.ToDoToTableEntity(todo));
+        }
+        catch(Exception exception)
+        {
+            context.getLogger().warning("Something went wrong while creating a todo\nRequest body: " + query + "\nException: " + exception.getStackTrace());
+            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).build();
+        }
 
-        context.getLogger().info("New Todo JSON: " + gson.toJson(entity));
         context.getLogger().info("Java HTTP POST Request \"CreateToDo\" processed\nNew ToDo has been added to the List");
 
-        return request.createResponseBuilder(HttpStatus.OK).header("Content-Type", "application/json").body(entity).build();
+        return request.createResponseBuilder(HttpStatus.OK).header("Content-Type", "application/json").body(todo).build();
     }
 
     /**
@@ -85,13 +104,18 @@ public class ToDoAPI
     public HttpResponseMessage GetToDos
     (
             @HttpTrigger(name = "req", methods = HttpMethod.GET, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE) HttpRequestMessage<Optional<String>> request,
-            @TableInput(name = DBNAME, partitionKey = PARTITIONKEY, tableName = TABLENAME, connection = "AzureWebJobsStorage") ToDoTableEntity[] toDoTableEntities,
             final ExecutionContext context
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDos\" received");
 
-        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.ToDoTableEntitiesToToDos(toDoTableEntities)).build();
+        ArrayList<ToDo> toDos = new ArrayList<>();
+
+        tableClient.listEntities(new ListEntitiesOptions().setFilter("PartitionKey eq '" + PARTITIONKEY + "'"), null, null).forEach(tableEntity -> {
+            toDos.add(EntityMapper.TableEntityToToDo(tableEntity));
+        });
+
+        return request.createResponseBuilder(HttpStatus.OK).body(toDos.toArray()).build();
     }
 
     /**
@@ -108,13 +132,12 @@ public class ToDoAPI
     public HttpResponseMessage GetToDoById(
             @HttpTrigger(name = "req", methods = HttpMethod.GET, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}") HttpRequestMessage<Optional<String>> request,
             @BindingName("id") String id,
-            @TableInput(name = DBNAME, partitionKey = PARTITIONKEY, rowKey = "{id}" ,tableName = TABLENAME, connection = "AzureWebJobsStorage") ToDoTableEntity toDoTableEntity,
             final ExecutionContext context
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDoById\" with id:${id} received");
 
-        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.ToDoTableEntityToToDo(toDoTableEntity)).build();
+        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntityToToDo(tableClient.getEntity(PARTITIONKEY, id))).build();
     }
 
     /**
@@ -131,7 +154,6 @@ public class ToDoAPI
     public HttpResponseMessage UpdateToDo(
             @HttpTrigger(name = "req", methods = HttpMethod.PUT, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}") HttpRequestMessage<Optional<String>> request,
             @BindingName("id") String id,
-//            @TableOutput(name = DBNAME, partitionKey = PARTITIONKEY, rowKey = "{id}" ,tableName = TABLENAME, connection = "AzureWebJobsStorage") OutputBinding<ToDoTableEntity> toDoTableEntity,
             final ExecutionContext context
     )
     {
@@ -141,11 +163,13 @@ public class ToDoAPI
         final String query = request.getQueryParameters().get("isComplete");
         final String body = request.getBody().orElse(query);
 
-//        todo.setComplete(gson.fromJson(body, ToDo.class).isComplete());
-//        toDoTableEntity.setValue();
+        TableEntity entity = tableClient.getEntity(PARTITIONKEY, id);
+        entity.getProperties().put("isComplete", gson.fromJson(body, ToDo.class).isComplete());
+
+        tableClient.updateEntity(entity , TableEntityUpdateMode.REPLACE);
 
         context.getLogger().info("Java HTTP GET Request \"UpdateToDo\" with id:" + id + " processed");
-        return request.createResponseBuilder(HttpStatus.I_AM_A_TEAPOT).build();
+        return request.createResponseBuilder(HttpStatus.OK).build();
     }
 
     /**
@@ -159,23 +183,13 @@ public class ToDoAPI
     @FunctionName("DeleteToDo")
     public HttpResponseMessage DeleteToDo(
             @HttpTrigger(name = "req", methods = HttpMethod.DELETE, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}") HttpRequestMessage<Optional<String>> request,
-            final ExecutionContext context,
-            @BindingName("id") String id
+            @BindingName("id") String id,
+            final ExecutionContext context
     )
     {
         context.getLogger().info("Java HTTP GET Request \"DeleteToDo\" with id:" + id + " received");
 
-        //Check all Todos for a matching id
-        for(ToDo todo: ToDoList)
-        {
-            if(todo.getId().equals(id))
-            {
-                context.getLogger().info("Java HTTP GET Request \"DeleteToDo\" with id:" + id + " processed");
-                return request.createResponseBuilder(HttpStatus.OK).build();
-            }
-        }
-
-        context.getLogger().info("Couldn't find " + id + " in ToDoList");
-        return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build();
+        tableClient.deleteEntity(PARTITIONKEY, id);
+        return request.createResponseBuilder(HttpStatus.OK).build();
     }
 }
