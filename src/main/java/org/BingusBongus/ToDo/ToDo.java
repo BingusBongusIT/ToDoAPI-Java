@@ -1,27 +1,38 @@
 package org.BingusBongus.ToDo;
 
 import java.time.LocalDateTime;
-import java.time.format.DateTimeFormatter;
 import java.util.UUID;
 
 /**
- * ToDo Datastructur
+ * Data structure for the ToDos
+ *
+ * @author colllijo
+ * @version 1.0.0
  */
 public class ToDo
 {
-    private String id;
-    private String createdDate;
-    private String modifiedDate;
+    private final String id;
     private String taskDescription;
     private boolean isComplete;
+    private String modifiedDate;
+    private final String createdDate;
 
     public ToDo(String taskDescription)
     {
         this.id = UUID.randomUUID().toString();
-        this.createdDate = LocalDateTime.now().toString();
-        this.modifiedDate = LocalDateTime.now().toString();
         this.taskDescription = taskDescription;
         this.isComplete = false;
+        this.modifiedDate = LocalDateTime.now().toString();
+        this.createdDate = LocalDateTime.now().toString();
+    }
+
+    public ToDo(String id, String taskDescription, boolean isComplete, String modifiedDate, String createdDate)
+    {
+        this.id = id;
+        this.taskDescription = taskDescription;
+        this.isComplete = isComplete;
+        this.modifiedDate = modifiedDate;
+        this.createdDate = createdDate;
     }
 
     public String getId()
