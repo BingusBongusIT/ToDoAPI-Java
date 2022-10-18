@@ -1,7 +1,7 @@
 package org.BingusBongus.ToDo;
 
+import com.azure.core.http.rest.PagedIterable;
 import com.azure.data.tables.models.TableEntity;
-import org.BingusBongus.ToDo.ToDo;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -16,7 +16,7 @@ import java.util.Objects;
  */
 public class EntityMapper
 {
-    private final static String PATITIONKEY = "TODO";
+    private final static String PARTITION_KEY = "TODO";
 
     /**
      * Takes in a ToDo abject and maps its values
@@ -32,9 +32,9 @@ public class EntityMapper
         Map<String, Object> toDoData = new HashMap<>();
         toDoData.put("taskDescription", todo.getTaskDescription());
         toDoData.put("isComplete", todo.isComplete());
-        toDoData.put("modifiedDate", todo.getModifiedDate());
-        toDoData.put("createdDate", todo.getCreatedDate());
-        return new TableEntity(PATITIONKEY, todo.getId()).setProperties(toDoData);
+        toDoData.put("modifiedDate", todo.getModifiedDate().toString().substring(0, todo.getModifiedDate().toString().length() - 1));
+        toDoData.put("createdDate", todo.getCreatedDate().toString());
+        return new TableEntity(PARTITION_KEY, todo.getId()).setProperties(toDoData);
     }
 
     /**
@@ -51,9 +51,19 @@ public class EntityMapper
         return new ToDo(
                 tableEntity.getRowKey(),
                 tableEntity.getProperty("taskDescription").toString(),
-                tableEntity.getProperty("isComplete").toString() == "true" ? true : false,
+                Objects.equals(tableEntity.getProperty("isComplete").toString(), "true"),
                 tableEntity.getProperty("modifiedDate").toString(),
                 tableEntity.getProperty("createdDate").toString()
         );
+    }
+
+    public static ToDo[] TableEntitiesToToDos(PagedIterable<TableEntity> tableEntities)
+    {
+        ToDo[] toDos = new ToDo[(int)tableEntities.stream().count()];
+
+        for(int i = 0; i < toDos.length; i++)
+            toDos[i] = EntityMapper.TableEntityToToDo((TableEntity)tableEntities.stream().toArray()[i]);
+
+        return toDos;
     }
 }
