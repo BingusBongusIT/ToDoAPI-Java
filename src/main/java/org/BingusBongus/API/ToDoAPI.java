@@ -4,9 +4,9 @@ import com.azure.data.tables.models.TableEntity;
 import com.google.gson.Gson;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.*;
+import org.BingusBongus.Table.Table;
 import org.BingusBongus.ToDo.EntityMapper;
 import org.BingusBongus.ToDo.ToDo;
-import org.BingusBongus.Worker.ToDoWorker;
 
 import java.io.Reader;
 import java.lang.reflect.Type;
@@ -23,20 +23,21 @@ public class ToDoAPI
 {
     //Constant Variables
     private final String ROUTE = "todo";
-    private final String PARTITION_KEY = "TODO";
     final public Gson gson = new Gson();
 
     /**
      * Function to crate a new todo.
      * Triggers with an HttpTrigger on api/todo and creates a new ToDo from the request-body
-     * which is then added to the Database after being converted
+     * which is then added to the Queue which later adds it to the database
      * @see org.BingusBongus.ToDo.ToDo
      * @see com.azure.data.tables.models.TableEntity
      *
      * To create a ToDo from the request google's Gson library is used to create a object from the json
-     * This object is then mapped to a tableentity which gets outputed to the Table
+     * This object is then mapped to a TableEntity which gets put on the queue
      * @see com.google.gson.Gson#fromJson(Reader, Type)
      * @see EntityMapper#ToDoToTableEntity(ToDo)
+     *
+     * @see org.BingusBongus.Worker.ToDoWorker
      *
      * @param request - request body containing the todo to create in json format
      * @return - returns a success code if the todo was successfully be added to the list
@@ -79,11 +80,10 @@ public class ToDoAPI
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDos\" received");
-        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntitiesToToDos(ToDoWorker.tableClient.listEntities())).build();
+        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntitiesToToDos(Table.client.listEntities())).build();
     }
 
     /**
-     *
      * Function to return a specific todo by its id
      * Triggers with an HttpTrigger on api/todo/{id} and returns the todo with the corresponding id if found
      * Checks all the ToDo for if the match the given id and if that one exists returns it
@@ -100,7 +100,7 @@ public class ToDoAPI
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDoById\" with id:${id} received");
-        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntityToToDo(ToDoWorker.tableClient.getEntity(PARTITION_KEY, id))).build();
+        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntityToToDo(Table.client.getEntity(Table.PARTITION_KEY, id))).build();
     }
 
     /**
@@ -127,7 +127,7 @@ public class ToDoAPI
         final String query = request.getQueryParameters().get("isComplete");
         final String body = request.getBody().orElse(query);
 
-        TableEntity entity = ToDoWorker.tableClient.getEntity(PARTITION_KEY, id);
+        TableEntity entity = Table.client.getEntity(Table.PARTITION_KEY, id);
         entity.getProperties().put("isComplete", gson.fromJson(body, ToDo.class).isComplete());
 
         message.setValue("updateToDo\n" + gson.toJson(EntityMapper.TableEntityToToDo(entity)));
