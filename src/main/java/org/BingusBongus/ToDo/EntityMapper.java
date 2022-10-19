@@ -2,6 +2,7 @@ package org.BingusBongus.ToDo;
 
 import com.azure.core.http.rest.PagedIterable;
 import com.azure.data.tables.models.TableEntity;
+import org.BingusBongus.Table.Table;
 
 import java.util.HashMap;
 import java.util.Map;
@@ -12,12 +13,10 @@ import java.util.Objects;
  * and vis-versa to post and get from the database
  *
  * @author collijo
- * @version 2.0.0
+ * @version 2.1.0
  */
 public class EntityMapper
 {
-    private final static String PARTITION_KEY = "TODO";
-
     /**
      * Takes in a ToDo abject and maps its values
      * to a TableEntity and returns this object
@@ -34,7 +33,7 @@ public class EntityMapper
         toDoData.put("isComplete", todo.isComplete());
         toDoData.put("modifiedDate", todo.getModifiedDate().toString().substring(0, todo.getModifiedDate().toString().length() - 1));
         toDoData.put("createdDate", todo.getCreatedDate().toString());
-        return new TableEntity(PARTITION_KEY, todo.getId()).setProperties(toDoData);
+        return new TableEntity(Table.PARTITION_KEY, todo.getId()).setProperties(toDoData);
     }
 
     /**
@@ -57,6 +56,15 @@ public class EntityMapper
         );
     }
 
+    /**
+     * Receives a PagedIterable and converts it to an Array
+     * as well as converting the TableEntities contained in it to ToDos
+     * @see org.BingusBongus.ToDo.ToDo
+     * @see com.azure.data.tables.models.TableEntity
+     *
+     * @param tableEntities - PagedIterable<TableEntity> which has been received from a table query
+     * @return - reutrns a ToDo[] with the remapped values of all TableEntities
+     */
     public static ToDo[] TableEntitiesToToDos(PagedIterable<TableEntity> tableEntities)
     {
         ToDo[] toDos = new ToDo[(int)tableEntities.stream().count()];
