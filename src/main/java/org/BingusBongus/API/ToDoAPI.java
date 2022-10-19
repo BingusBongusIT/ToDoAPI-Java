@@ -1,21 +1,15 @@
-package org.BingusBongus.ToDo;
+package org.BingusBongus.API;
 
-import com.azure.data.tables.TableClient;
-import com.azure.data.tables.TableClientBuilder;
-import com.azure.data.tables.models.ListEntitiesOptions;
 import com.azure.data.tables.models.TableEntity;
-import com.azure.data.tables.models.TableEntityUpdateMode;
 import com.google.gson.Gson;
 import com.microsoft.azure.functions.*;
-import com.microsoft.azure.functions.annotation.AuthorizationLevel;
-import com.microsoft.azure.functions.annotation.BindingName;
-import com.microsoft.azure.functions.annotation.FunctionName;
-import com.microsoft.azure.functions.annotation.HttpTrigger;
+import com.microsoft.azure.functions.annotation.*;
+import org.BingusBongus.ToDo.EntityMapper;
+import org.BingusBongus.ToDo.ToDo;
+import org.BingusBongus.Worker.ToDoWorker;
 
 import java.io.Reader;
 import java.lang.reflect.Type;
-import java.util.ArrayList;
-import java.util.Arrays;
 import java.util.Optional;
 
 /**
@@ -29,15 +23,8 @@ public class ToDoAPI
 {
     //Constant Variables
     private final String ROUTE = "todo";
-    private final String TABLENAME = "todos";
     private final String PARTITION_KEY = "TODO";
     final public Gson gson = new Gson();
-
-    //Connect to the Database
-    private final TableClient tableClient = new TableClientBuilder()
-            .connectionString("CONNECTION_STRING = DefaultEndpointsProtocol=https;AccountName=devstoreaccount1;AccountKey=Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==;TableEndpoint=http://127.0.0.1:10002/devstoreaccount1;")
-            .tableName(TABLENAME)
-            .buildClient();
 
     /**
      * Function to crate a new todo.
@@ -58,6 +45,7 @@ public class ToDoAPI
     public HttpResponseMessage createToDo
     (
         @HttpTrigger(name = "req", methods = HttpMethod.POST, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE) HttpRequestMessage<String> request,
+        @QueueOutput(name = "ToDo", queueName = "todo-queue", connection = "AzureWebJobsStorage") OutputBinding<String> message,
         final ExecutionContext context
     )
     {
@@ -65,26 +53,15 @@ public class ToDoAPI
 
         //Get query
         final String query = request.getBody();
-
         if(gson.fromJson(query, ToDo.class).getTaskDescription().trim().isEmpty())
             return request.createResponseBuilder(HttpStatus.BAD_REQUEST).build();
 
         ToDo todo = new ToDo(gson.fromJson(query, ToDo.class).getTaskDescription());
 
-        try
-        {
-            //Create a ToDo from the query using gson, map it to a TableEntity and insert it into the table
-            tableClient.upsertEntity(EntityMapper.ToDoToTableEntity(todo));
-        }
-        catch(Exception exception)
-        {
-            context.getLogger().warning("Something went wrong while creating a todo\nRequest body: " + query + "\nException: " + Arrays.toString(exception.getStackTrace()));
-            return request.createResponseBuilder(HttpStatus.INTERNAL_SERVER_ERROR).build();
-        }
+        message.setValue("createToDo\n" + gson.toJson(todo));
 
         context.getLogger().info("Java HTTP POST Request \"CreateToDo\" processed\nNew ToDo has been added to the List");
-
-        return request.createResponseBuilder(HttpStatus.OK).header("Content-Type", "application/json").body(todo).build();
+        return request.createResponseBuilder(HttpStatus.OK).body(todo).build();
     }
 
     /**
@@ -102,12 +79,7 @@ public class ToDoAPI
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDos\" received");
-
-        ArrayList<ToDo> toDos = new ArrayList<>();
-
-        tableClient.listEntities(new ListEntitiesOptions().setFilter("PartitionKey eq '" + PARTITION_KEY + "'"), null, null).forEach(tableEntity -> toDos.add(EntityMapper.TableEntityToToDo(tableEntity)));
-
-        return request.createResponseBuilder(HttpStatus.OK).body(toDos.toArray()).build();
+        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntitiesToToDos(ToDoWorker.tableClient.listEntities())).build();
     }
 
     /**
@@ -128,8 +100,7 @@ public class ToDoAPI
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDoById\" with id:${id} received");
-
-        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntityToToDo(tableClient.getEntity(PARTITION_KEY, id))).build();
+        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntityToToDo(ToDoWorker.tableClient.getEntity(PARTITION_KEY, id))).build();
     }
 
     /**
@@ -145,6 +116,7 @@ public class ToDoAPI
     @FunctionName("UpdateToDo")
     public HttpResponseMessage UpdateToDo(
             @HttpTrigger(name = "req", methods = HttpMethod.PUT, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}") HttpRequestMessage<Optional<String>> request,
+            @QueueOutput(name = "ToDo", queueName = "todo-queue", connection = "AzureWebJobsStorage") OutputBinding<String> message,
             @BindingName("id") String id,
             final ExecutionContext context
     )
@@ -155,10 +127,10 @@ public class ToDoAPI
         final String query = request.getQueryParameters().get("isComplete");
         final String body = request.getBody().orElse(query);
 
-        TableEntity entity = tableClient.getEntity(PARTITION_KEY, id);
+        TableEntity entity = ToDoWorker.tableClient.getEntity(PARTITION_KEY, id);
         entity.getProperties().put("isComplete", gson.fromJson(body, ToDo.class).isComplete());
 
-        tableClient.updateEntity(entity , TableEntityUpdateMode.REPLACE);
+        message.setValue("updateToDo\n" + gson.toJson(EntityMapper.TableEntityToToDo(entity)));
 
         context.getLogger().info("Java HTTP GET Request \"UpdateToDo\" with id:" + id + " processed");
         return request.createResponseBuilder(HttpStatus.OK).build();
@@ -176,12 +148,13 @@ public class ToDoAPI
     public HttpResponseMessage DeleteToDo(
             @HttpTrigger(name = "req", methods = HttpMethod.DELETE, authLevel = AuthorizationLevel.ANONYMOUS, route = ROUTE + "/{id}") HttpRequestMessage<Optional<String>> request,
             @BindingName("id") String id,
+            @QueueOutput(name = "ToDo", queueName = "todo-queue", connection = "AzureWebJobsStorage") OutputBinding<String> msg,
             final ExecutionContext context
     )
     {
-        context.getLogger().info("Java HTTP GET Request \"DeleteToDo\" with id:" + id + " received");
+        msg.setValue("deleteToDo\n" + id);
 
-        tableClient.deleteEntity(PARTITION_KEY, id);
+        context.getLogger().info("Java HTTP GET Request \"DeleteToDo\" with id:" + id + " received");
         return request.createResponseBuilder(HttpStatus.OK).build();
     }
 }
