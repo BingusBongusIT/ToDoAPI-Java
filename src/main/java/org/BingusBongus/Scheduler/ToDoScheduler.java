@@ -1,11 +1,9 @@
 package org.BingusBongus.Scheduler;
 
-import com.azure.data.tables.models.ListEntitiesOptions;
 import com.microsoft.azure.functions.ExecutionContext;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.TimerTrigger;
 import org.BingusBongus.Table.Table;
-import org.BingusBongus.ToDo.EntityMapper;
 import org.BingusBongus.ToDo.ToDo;
 
 import java.time.LocalDateTime;
@@ -30,13 +28,13 @@ public class ToDoScheduler
         ExecutionContext context
     )
     {
-        ToDo[] toDos = EntityMapper.TableEntitiesToToDos(Table.client.listEntities(new ListEntitiesOptions().setFilter("PartitionKey eq 'TODO' and isComplete eq true"), null, null));
+        ToDo[] toDos = Table.getToDos();
 
         for(ToDo todo:toDos)
         {
             if(LocalDateTime.now().minusDays(7).isAfter(todo.getModifiedDate()))
             {
-                Table.client.deleteEntity(Table.PARTITION_KEY, todo.getId());
+                Table.deleteToDo(todo.getId());
                 context.getLogger().info("Deleted the todo with the id:" + todo.getId() + "\nAs it has been complete for a week");
             }
         }

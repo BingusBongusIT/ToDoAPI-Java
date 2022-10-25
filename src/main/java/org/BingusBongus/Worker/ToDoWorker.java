@@ -1,16 +1,12 @@
 package org.BingusBongus.Worker;
 
 import com.azure.data.tables.models.TableEntity;
-import com.azure.data.tables.models.TableEntityUpdateMode;
 import com.google.gson.Gson;
 import com.microsoft.azure.functions.ExecutionContext;
 import com.microsoft.azure.functions.annotation.FunctionName;
 import com.microsoft.azure.functions.annotation.QueueTrigger;
 import org.BingusBongus.Table.Table;
-import org.BingusBongus.ToDo.EntityMapper;
 import org.BingusBongus.ToDo.ToDo;
-
-import java.time.LocalDateTime;
 
 /**
  * Class Containing Worker Functions to complete the tasks on the queue
@@ -46,17 +42,18 @@ public class ToDoWorker
         switch (msg.split("\n")[0])
         {
             case "createToDo":
-                Table.client.upsertEntity(EntityMapper.ToDoToTableEntity(gson.fromJson(msg.split("\n")[1], ToDo.class)));
+                Table.createToDo(gson.fromJson(msg.split("\n")[1], ToDo.class));
+                //Table.client.upsertEntity(EntityMapper.ToDoToTableEntity(gson.fromJson(msg.split("\n")[1], ToDo.class)));
                 context.getLogger().info("Added a ToDo to the table\n" + msg);
                 break;
             case "updateToDo":
                 ToDo todo = gson.fromJson(msg.split("\n")[1], ToDo.class);
-                todo.setModifiedDate(LocalDateTime.now());
-                Table.client.updateEntity(EntityMapper.ToDoToTableEntity(todo), TableEntityUpdateMode.REPLACE);
+                //todo.setModifiedDate(LocalDateTime.now());
+                Table.updateToDo(todo);
                 context.getLogger().info("Updated the ToDo with the id: " + gson.fromJson(msg.split("\n")[1], TableEntity.class).getRowKey() + "\n" + msg);
                 break;
             case "deleteToDo":
-                Table.client.deleteEntity(Table.PARTITION_KEY, msg.split("\n")[1]);
+                Table.deleteToDo(msg.split("\n")[1]);
                 context.getLogger().info("Delete the ToDo with the id: " + msg.split("\n")[1] + "\n" + msg);
                 break;
         }
