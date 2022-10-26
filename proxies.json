@@ -1,0 +1,10 @@
+{
+  "proxies": {
+    "Base": {
+      "matchCondition": {
+        "route": "/"
+      },
+      "backendUri": "https://sabingusbongus.blob.core.windows.net/bb-frontend/index.html"
+    }
+  }
+}
