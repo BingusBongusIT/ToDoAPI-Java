@@ -1,10 +1,11 @@
 {
   "proxies": {
+    "$schema": "http://json.schemastore.org/proxies",
     "Base": {
       "matchCondition": {
         "route": "/"
       },
-      "backendUri": "https://sabingusbongus.blob.core.windows.net/bb-frontend/index.html"
-    }
+      "backendUri": "https://sabingusbongus.blob.core.windows.net/bb-frontend/index.html?sp=r&st=2022-10-26T05:33:53Z&se=2022-10-26T13:33:53Z&spr=https&sv=2021-06-08&sr=b&sig=svGfG6523dnMPMOIzjZ6Gps8IoI5a8peZiGN8qKy33A%3D"
+      }
   }
 }
