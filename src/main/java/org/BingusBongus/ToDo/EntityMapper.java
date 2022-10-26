@@ -1,22 +1,23 @@
 package org.BingusBongus.ToDo;
 
-import com.azure.core.http.rest.PagedIterable;
-import com.azure.data.tables.models.TableEntity;
-import org.BingusBongus.Table.Table;
+import com.azure.cosmos.implementation.Utils;
+import com.azure.cosmos.util.CosmosPagedIterable;
+import com.fasterxml.jackson.databind.JsonNode;
+import com.fasterxml.jackson.databind.node.ObjectNode;
 
-import java.util.HashMap;
-import java.util.Map;
-import java.util.Objects;
+import com.google.gson.Gson;
 
 /**
  * Class with static Methods to Map the java objects to table-entities
  * and vis-versa to post and get from the database
  *
  * @author collijo
- * @version 2.1.0
+ * @version 3.0.0
  */
 public class EntityMapper
 {
+    private final static Gson gson = new Gson();
+
     /**
      * Takes in a ToDo abject and maps its values
      * to a TableEntity and returns this object
@@ -26,33 +27,33 @@ public class EntityMapper
      * @param todo - ToDo object to map to a ToDoTableEntity
      * @return - the remapped ToDo object
      */
-    public static TableEntity ToDoToTableEntity(ToDo todo)
+    public static JsonNode ToDoToTableEntity(ToDo todo)
     {
-        Map<String, Object> toDoData = new HashMap<>();
-        toDoData.put("taskDescription", todo.getTaskDescription());
-        toDoData.put("isComplete", todo.isComplete());
-        toDoData.put("modifiedDate", todo.getModifiedDate().toString().substring(0, todo.getModifiedDate().toString().length() - 1));
-        toDoData.put("createdDate", todo.getCreatedDate().toString());
-        return new TableEntity(Table.PARTITION_KEY, todo.getId()).setProperties(toDoData);
+        ObjectNode todoJson = Utils.getSimpleObjectMapper().createObjectNode();
+
+        todoJson.put("id", todo.getId());
+        todoJson.put("taskDescription", todo.getTaskDescription());
+        todoJson.put("isComplete", todo.isComplete());
+        todoJson.put("modifiedDate", todo.getModifiedDate().toString());
+        todoJson.put("createdDate", todo.getCreatedDate().toString());
+
+        return todoJson;
     }
 
     /**
-     * Takes in a TableEntity and maps its values
+     * Takes in a CosmosPagedIterable<JsonNode> and maps the json
      * to a ToDo object which then is returned
-     * @see com.azure.data.tables.models.TableEntity
      * @see org.BingusBongus.ToDo.ToDo
+     * @see com.google.gson.Gson
      *
-     * @param tableEntity - TableEntity to map to a ToDo object
+     * @param tableEntity - CosmosPagedIterable<> to map to a ToDo object
      * @return - the remapped TableEntity
      */
-    public static ToDo TableEntityToToDo(TableEntity tableEntity)
+    public static ToDo TableEntityToToDo(JsonNode tableEntity)
     {
-        return new ToDo(
-                tableEntity.getRowKey(),
-                tableEntity.getProperty("taskDescription").toString(),
-                Objects.equals(tableEntity.getProperty("isComplete").toString(), "true"),
-                tableEntity.getProperty("modifiedDate").toString(),
-                tableEntity.getProperty("createdDate").toString()
+        return gson.fromJson(
+                tableEntity.toString(),
+                ToDo.class
         );
     }
 
@@ -65,13 +66,14 @@ public class EntityMapper
      * @param tableEntities - PagedIterable<TableEntity> which has been received from a table query
      * @return - reutrns a ToDo[] with the remapped values of all TableEntities
      */
-    public static ToDo[] TableEntitiesToToDos(PagedIterable<TableEntity> tableEntities)
+    public static ToDo[] TableEntitiesToToDos(CosmosPagedIterable<JsonNode> tableEntities)
     {
         ToDo[] toDos = new ToDo[(int)tableEntities.stream().count()];
 
         for(int i = 0; i < toDos.length; i++)
-            toDos[i] = EntityMapper.TableEntityToToDo((TableEntity)tableEntities.stream().toArray()[i]);
+            toDos[i] = TableEntityToToDo((JsonNode) tableEntities.stream().toArray()[i]);
 
         return toDos;
     }
+
 }

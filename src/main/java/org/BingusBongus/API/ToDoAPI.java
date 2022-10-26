@@ -1,6 +1,5 @@
 package org.BingusBongus.API;
 
-import com.azure.data.tables.models.TableEntity;
 import com.google.gson.Gson;
 import com.microsoft.azure.functions.*;
 import com.microsoft.azure.functions.annotation.*;
@@ -17,7 +16,7 @@ import java.util.Optional;
  * users interaction with them
  *
  * @author colllijo
- * @version 2.0.0
+ * @version 3.0.0
  */
 public class ToDoAPI
 {
@@ -79,8 +78,13 @@ public class ToDoAPI
             final ExecutionContext context
     )
     {
+
+
         context.getLogger().info("Java HTTP GET Request \"GetToDos\" received");
-        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntitiesToToDos(Table.client.listEntities())).build();
+        return request
+                .createResponseBuilder(HttpStatus.OK)
+                .body(Table.getToDos())
+                .build();
     }
 
     /**
@@ -100,7 +104,7 @@ public class ToDoAPI
     )
     {
         context.getLogger().info("Java HTTP GET Request \"GetToDoById\" with id:${id} received");
-        return request.createResponseBuilder(HttpStatus.OK).body(EntityMapper.TableEntityToToDo(Table.client.getEntity(Table.PARTITION_KEY, id))).build();
+        return request.createResponseBuilder(HttpStatus.OK).body(Table.getToDoById(id)).build();
     }
 
     /**
@@ -127,10 +131,9 @@ public class ToDoAPI
         final String query = request.getQueryParameters().get("isComplete");
         final String body = request.getBody().orElse(query);
 
-        TableEntity entity = Table.client.getEntity(Table.PARTITION_KEY, id);
-        entity.getProperties().put("isComplete", gson.fromJson(body, ToDo.class).isComplete());
-
-        message.setValue("updateToDo\n" + gson.toJson(EntityMapper.TableEntityToToDo(entity)));
+        ToDo todo = Table.getToDoById(id);
+        todo.setComplete(gson.fromJson(body, ToDo.class).isComplete());
+        message.setValue("updateToDo\n" + gson.toJson(todo));
 
         context.getLogger().info("Java HTTP GET Request \"UpdateToDo\" with id:" + id + " processed");
         return request.createResponseBuilder(HttpStatus.OK).build();

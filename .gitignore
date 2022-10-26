@@ -37,3 +37,6 @@ hs_err_pid*
 local.settings.json
 bin/
 obj/
+
+# Connection String for the table
+src/main/java/org/BingusBongus/Table/TableConnectionInfo.java
