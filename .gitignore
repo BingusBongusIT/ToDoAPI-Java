@@ -40,3 +40,5 @@ obj/
 
 # Connection String for the table
 src/main/java/org/BingusBongus/Table/TableConnectionInfo.java
+/src/main/java/org/BingusBongus/Table/TableConnectionInfo.java
+
